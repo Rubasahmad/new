@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IP Expresser – Cyber Threat Intelligence</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+:root {
+    --bg: #080d14;
+    --surface: #0d1520;
+    --border: #1a2a3a;
+    --accent: #00d4ff;
+    --text: #c8d8e8;
+    --dim: #4a6075;
+    --high: #ff3c3c;
+    --medium: #ffaa00;
+    --low: #39ff14;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,212,255,0.012) 2px, rgba(0,212,255,0.012) 4px);
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.container { max-width: 1140px; margin: auto; padding: 24px 20px; }
+
+header {
+    text-align: center;
+    padding: 32px 0 28px;
+}
+header::after {
+    content: '';
+    display: block;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    margin-top: 24px;
+}
+
+.logo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 2.2rem;
+    color: var(--accent);
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px rgba(0,212,255,0.5);
+}
+
+.tagline {
+    font-size: 0.8rem;
+    color: var(--dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 6px;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.search-bar {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 28px;
+}
+
+.ip-input {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    padding: 12px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--accent);
+    width: 280px;
+    outline: none;
+    transition: border 0.2s, box-shadow 0.2s;
+}
+.ip-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(0,212,255,0.2);
+}
+.ip-input::placeholder { color: var(--dim); }
+
+.btn {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 2px;
+    padding: 12px 22px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+}
+.btn-primary { background: var(--accent); color: var(--bg); }
+.btn-primary:hover { background: #fff; box-shadow: 0 0 18px rgba(0,212,255,0.4); }
+.btn-ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.btn-ghost:hover { background: rgba(0,212,255,0.07); }
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 22px;
+    position: relative;
+    overflow: hidden;
+}
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+.card-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+}
+
+#map {
+    height: 280px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    filter: hue-rotate(180deg) invert(1) brightness(0.85);
+}
+
+.loader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 30px;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+}
+.spinner {
+    width: 22px; height: 22px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden { display: none !important; }
+
+/* debug box */
+.debug-box {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    background: rgba(0,212,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 14px;
+    color: var(--dim);
+    max-height: 120px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.ip-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.6rem;
+    color: var(--accent);
+    text-shadow: 0 0 10px rgba(0,212,255,0.35);
+    margin-bottom: 4px;
+}
+
+.location-line {
+    font-size: 0.85rem;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+.info-item {
+    background: rgba(0,212,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+.info-key {
+    font-size: 0.62rem;
+    color: var(--dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+}
+.info-val {
+    font-size: 0.9rem;
+    color: var(--text);
+    font-weight: 600;
+    margin-top: 2px;
+    word-break: break-word;
+}
+
+.risk-section { margin-top: 14px; }
+.risk-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.risk-score-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.risk-level-lbl {
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+    margin-left: 10px;
+}
+.risk-bar-bg {
+    height: 8px;
+    background: var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.risk-bar-fill {
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+}
+.risk-factors {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.factor-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.68rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid;
+    letter-spacing: 1px;
+}
+.factor-tag.active { border-color: var(--high); color: var(--high); background: rgba(255,60,60,0.08); }
+.factor-tag.warn   { border-color: var(--medium); color: var(--medium); background: rgba(255,170,0,0.08); }
+.factor-tag.safe   { border-color: var(--dim); color: var(--dim); }
+
+#riskChart { height: 240px !important; width: 100% !important; }
+
+.device-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.history-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.history-chip {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    padding: 5px 14px;
+    background: rgba(0,212,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    color: var(--dim);
+    transition: all 0.2s;
+    letter-spacing: 1px;
+}
+.history-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+.empty-state {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--dim);
+    padding: 6px 0;
+}
+
+.alert {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    padding: 12px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--high);
+    color: var(--high);
+    background: rgba(255,60,60,0.07);
+}
+
+@media (max-width: 700px) {
+    .grid { grid-template-columns: 1fr; }
+    .info-grid, .device-list { grid-template-columns: 1fr; }
+    .ip-input { width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+    <div class="logo">🛡 IP EXPRESSER</div>
+    <div class="tagline">Cyber Threat Intelligence Dashboard</div>
+    <div class="search-bar">
+        <button class="btn btn-ghost" onclick="getMyIP()">📍 My IP</button>
+        <input class="ip-input" id="ipInput" placeholder="Enter IP address…" onkeydown="if(event.key==='Enter') checkIP()">
+        <button class="btn btn-primary" onclick="checkIP()">Analyze</button>
+    </div>
+</header>
+
+<div id="loader" class="loader hidden">
+    <div class="spinner"></div>
+    <span>Scanning target…</span>
+</div>
+
+<div class="grid">
+
+    <div class="card">
+        <div class="card-title">// IP Intelligence</div>
+        <div id="result"><div class="empty-state">Enter an IP to begin analysis.</div></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">// Geolocation</div>
+        <div id="map"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">// Threat Indicators</div>
+        <canvas id="riskChart"></canvas>
+    </div>
+
+    <div class="card">
+        <div class="card-title">// Device Info</div>
+        <div id="deviceInfo" class="device-list"><div class="empty-state">No data yet.</div></div>
+        <div class="card-title" style="margin-top:22px;">// Recent Searches</div>
+        <div id="history" class="history-tags"></div>
+    </div>
+
+</div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+let map, chart;
+
+// ── MAP ───────────────────────────────────────────────────────────────────────
+function initMap(lat = 20, lon = 0, zoom = 2) {
+    if (map) map.remove();
+    map = L.map('map', { zoomControl: true }).setView([lat, lon], zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+    if (zoom > 2) L.marker([lat, lon]).addTo(map);
+}
+initMap();
+
+// ── VALIDATION ────────────────────────────────────────────────────────────────
+function isValidIP(ip) {
+    return /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(ip);
+}
+
+// ── DEVICE ────────────────────────────────────────────────────────────────────
+function getDeviceInfo() {
+    const ua = navigator.userAgent;
+    return {
+        "Device":  /mobile/i.test(ua) ? "Mobile" : /tablet|ipad/i.test(ua) ? "Tablet" : "Desktop",
+        "OS":      /windows/i.test(ua) ? "Windows" : /android/i.test(ua) ? "Android" :
+                   /iphone|ipad|ipod/i.test(ua) ? "iOS" : /mac/i.test(ua) ? "macOS" :
+                   /linux/i.test(ua) ? "Linux" : "Unknown",
+        "Browser": /edg/i.test(ua) ? "Edge" : /chrome|crios/i.test(ua) ? "Chrome" :
+                   /firefox/i.test(ua) ? "Firefox" : /safari/i.test(ua) ? "Safari" : "Unknown",
+        "Screen":  `${screen.width}×${screen.height}`
+    };
+}
+
+function renderDevice() {
+    const info = getDeviceInfo();
+    document.getElementById("deviceInfo").innerHTML =
+        Object.entries(info).map(([k, v]) => `
+            <div class="info-item">
+                <div class="info-key">${k}</div>
+                <div class="info-val">${v}</div>
+            </div>
+        `).join('');
+}
+
+// ── FETCH MY IP ───────────────────────────────────────────────────────────────
+// ip-api.com can detect our own IP via the /json/ endpoint (no IP in path)
+async function getMyIP() {
+    try {
+        const res  = await fetch('http://ip-api.com/json/?fields=query');
+        const data = await res.json();
+        document.getElementById("ipInput").value = data.query;
+        checkIP();
+    } catch (e) {
+        document.getElementById("result").innerHTML = '<div class="alert">Could not detect IP. Check connection.</div>';
+    }
+}
+
+// ── MAIN ANALYSIS ─────────────────────────────────────────────────────────────
+/*
+  ip-api.com free plan fields used:
+    status, message, country, countryCode, regionName, city,
+    lat, lon, isp, org, as,
+    proxy (bool), hosting (bool), mobile (bool), query
+  
+  NOTE: ip-api.com requires HTTP (not HTTPS) for the free plan.
+  If your site is on HTTPS, use the paid plan or a CORS proxy.
+  For local / HTTP hosting this works perfectly.
+*/
+async function checkIP() {
+    const ip     = document.getElementById("ipInput").value.trim();
+    const result = document.getElementById("result");
+    const loader = document.getElementById("loader");
+
+    if (!ip) { result.innerHTML = '<div class="alert">Enter an IP address.</div>'; return; }
+    if (!isValidIP(ip)) { result.innerHTML = '<div class="alert">Invalid format — e.g. 8.8.8.8</div>'; return; }
+
+    loader.classList.remove("hidden");
+    result.innerHTML = "";
+
+    try {
+        // Fields requested explicitly so we get proxy/hosting/mobile booleans
+        const fields = 'status,message,country,countryCode,regionName,city,lat,lon,isp,org,as,proxy,hosting,mobile,query';
+        const res    = await fetch(`http://ip-api.com/json/${ip}?fields=${fields}`);
+        const d      = await res.json();
+
+        loader.classList.add("hidden");
+
+        if (d.status === "fail") {
+            result.innerHTML = `<div class="alert">Lookup failed: ${d.message || "unknown error"}</div>`;
+            return;
+        }
+
+        // ── Risk scoring using actual boolean fields ───────────────────────
+        const scores = {
+            proxy:    d.proxy   ? 50 : 0,
+            hosting:  d.hosting ? 30 : 0,
+            mobile:   0,       // mobile = low risk, shown as info
+        };
+
+        // Extra keyword scoring on ISP/org as fallback
+        const ispLow = (d.isp || "").toLowerCase() + " " + (d.org || "").toLowerCase();
+        const vpnKw  = ["vpn","nordvpn","expressvpn","surfshark","cyberghost","protonvpn","mullvad","windscribe","pia","tunnelbear","hidemyass","privatevpn"];
+        const torKw  = ["tor ","tor-","torproject","exit node"];
+
+        if (!scores.proxy && vpnKw.some(k => ispLow.includes(k))) scores.proxy = 45;
+        if (torKw.some(k => ispLow.includes(k))) scores.proxy = Math.max(scores.proxy, 55);
+
+        const total = Math.min(100, scores.proxy + scores.hosting);
+        const level = total >= 55 ? "high" : total >= 20 ? "medium" : "low";
+        const color = level === "high" ? "var(--high)" : level === "medium" ? "var(--medium)" : "var(--low)";
+
+        // ── Build result HTML ─────────────────────────────────────────────
+        const flagUrl = d.countryCode
+            ? `https://flagsapi.com/${d.countryCode}/flat/24.png`
+            : "";
+
+        const factorHTML = [
+            { key: "PROXY/VPN",  val: scores.proxy,   active: scores.proxy > 0 },
+            { key: "HOSTING/DC", val: scores.hosting,  active: scores.hosting > 0 },
+            { key: "MOBILE",     val: d.mobile ? 1 : 0, active: false, warn: d.mobile },
+        ].map(f => {
+            const cls = f.active ? "active" : f.warn ? "warn" : "safe";
+            const badge = f.active ? `+${f.val}` : f.warn ? "INFO" : "CLEAN";
+            return `<span class="factor-tag ${cls}">${f.key} ${badge}</span>`;
+        }).join('');
+
+        result.innerHTML = `
+            <div class="ip-label">${d.query}</div>
+            <div class="location-line">
+                ${flagUrl ? `<img src="${flagUrl}" style="vertical-align:middle" alt="">` : ""}
+                ${d.city || "—"}, ${d.regionName || "—"}, ${d.country || "—"}
+            </div>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-key">ISP</div>
+                    <div class="info-val">${d.isp || "—"}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-key">Organization</div>
+                    <div class="info-val">${d.org || "—"}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-key">AS Number</div>
+                    <div class="info-val">${d.as ? d.as.split(' ')[0] : "—"}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-key">Connection</div>
+                    <div class="info-val">${d.mobile ? "Mobile" : d.hosting ? "Hosting/DC" : d.proxy ? "Proxy/VPN" : "Broadband"}</div>
+                </div>
+            </div>
+
+            <div class="risk-section">
+                <div class="risk-header">
+                    <div>
+                        <span class="risk-score-num" style="color:${color}">${total}</span>
+                        <span class="risk-level-lbl" style="color:${color}">/ 100 — ${level.toUpperCase()}</span>
+                    </div>
+                </div>
+                <div class="risk-bar-bg">
+                    <div class="risk-bar-fill" style="width:${total}%;background:${color}"></div>
+                </div>
+                <div class="risk-factors">${factorHTML}</div>
+            </div>
+        `;
+
+        // ── Map ───────────────────────────────────────────────────────────
+        if (d.lat && d.lon) initMap(parseFloat(d.lat), parseFloat(d.lon), 6);
+
+        // ── Chart ─────────────────────────────────────────────────────────
+        updateChart(scores.proxy, scores.hosting, d.mobile ? 10 : 0);
+
+        renderDevice();
+        saveHistory(ip);
+
+    } catch (e) {
+        loader.classList.add("hidden");
+        result.innerHTML = `<div class="alert">Request failed.<br><small style="opacity:.6">${e.message}</small><br><br>
+            <small>If you're on HTTPS, ip-api.com blocks mixed content.<br>
+            Open this file locally (double-click the .html file) and it will work.</small></div>`;
+    }
+}
+
+// ── CHART ─────────────────────────────────────────────────────────────────────
+function updateChart(proxy, hosting, mobile) {
+    const canvas = document.getElementById("riskChart");
+    if (chart) chart.destroy();
+
+    chart = new Chart(canvas, {
+        type: "bar",
+        data: {
+            labels: ["PROXY / VPN", "HOSTING / DC", "MOBILE"],
+            datasets: [{
+                label: "Risk Score",
+                data: [proxy, hosting, mobile],
+                backgroundColor: [
+                    proxy   > 0 ? "#ff3c3c" : "#1a2a3a",
+                    hosting > 0 ? "#ffaa00" : "#1a2a3a",
+                    mobile  > 0 ? "#00d4ff" : "#1a2a3a",
+                ],
+                borderRadius: 4,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` Score: ${ctx.parsed.y}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: "#4a6075", font: { family: "Share Tech Mono", size: 10 } },
+                    grid: { color: "#1a2a3a" }
+                },
+                y: {
+                    beginAtZero: true,
+                    max: 60,
+                    ticks: { color: "#4a6075", font: { family: "Share Tech Mono", size: 10 } },
+                    grid: { color: "#1a2a3a" }
+                }
+            }
+        }
+    });
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────────
+function saveHistory(ip) {
+    let h = JSON.parse(localStorage.getItem("ipe_h") || "[]");
+    h = h.filter(i => i !== ip);
+    h.unshift(ip);
+    if (h.length > 6) h.pop();
+    localStorage.setItem("ipe_h", JSON.stringify(h));
+    renderHistory();
+}
+
+function renderHistory() {
+    const el = document.getElementById("history");
+    const h  = JSON.parse(localStorage.getItem("ipe_h") || "[]");
+    el.innerHTML = h.length
+        ? h.map(ip => `<span class="history-chip" onclick="document.getElementById('ipInput').value='${ip}';checkIP()">${ip}</span>`).join('')
+        : '<div class="empty-state">No history yet.</div>';
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.onload = () => {
+    renderDevice();
+    renderHistory();
+    getMyIP();
+};
+</script>
+</body>
+</html>
